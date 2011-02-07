@@ -70,3 +70,5 @@ Your `ProjectDefinition` would then become
        def ghCredentials = gh.LocalGhCreds(log)
        def ghRepository = (<gh-user>, <gh-repo>)
     }
+
+Doug Tangren (softprops) 2011
