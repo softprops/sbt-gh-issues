@@ -92,7 +92,7 @@ trait LabelTasks extends sbt.Project with IssuesApi with ColorizedLogging {
 trait IssueTasks extends sbt.Project with IssuesApi with ColorizedLogging {
   import net.liftweb.json.JsonAST._
 
-  implicit def one[Issue](js: JValue) =
+  implicit def one(js: JValue) =
     try {
       (for {
         f        <- Issues.one(js)
@@ -112,7 +112,7 @@ trait IssueTasks extends sbt.Project with IssuesApi with ColorizedLogging {
       }).headOption
     } catch { case dispatch.StatusCode(c, _) => None }
 
-  implicit def many[Issue](js: JValue) =
+  implicit def many(js: JValue) =
     try {
       for {
         is       <- Issues.many(js)
@@ -218,7 +218,7 @@ trait IssueTasks extends sbt.Project with IssuesApi with ColorizedLogging {
 trait CommentTasks extends sbt.Project with IssuesApi with ColorizedLogging {
   import net.liftweb.json.JsonAST._
 
-  implicit def oneComment[Issue](js: JValue) =
+  implicit def oneComment(js: JValue) =
     try {
       (for {
         f        <- Comments.one(js)
@@ -233,7 +233,7 @@ trait CommentTasks extends sbt.Project with IssuesApi with ColorizedLogging {
       }).headOption
     } catch { case dispatch.StatusCode(c, _) => None }
 
-  implicit def manyComments[Comment](js: JValue) =
+  implicit def manyComments(js: JValue) =
    try {
      for {
        c         <- Comments.many(js)
