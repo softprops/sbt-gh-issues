@@ -60,7 +60,10 @@ Obviously, you will not want to check in your github username and password with 
 the `ghCredentials` tuple. You can use the `LocalGhCreds` function which assumes you have an externally defined `.gh`
 file containing your github username and password. This should follow the standard Java [Properties](http://download.oracle.com/javase/6/docs/api/java/util/Properties.html) file format.
 
-    > cat path/to/home/.gh
+    > echo "username=your-gh-username
+    password=your-gh-password" > ~/.gh
+
+    > cat ~/.gh
     username=your-gh-username
     password=your-gh-password
 
