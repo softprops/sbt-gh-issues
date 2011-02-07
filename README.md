@@ -46,7 +46,7 @@ Declare the gh issues plugin in your `PluginDefinition`.
 
     class Plugins(info: ProjectInfo) extends PluginDefinition(info) {
       val lessis = "less is repo" at "http://repo.lessis.me"
-      val ghIssues = "me.lessis" % "gh-sbt-plugin" % "0.0.1"
+      val ghIssues = "me.lessis" % "sbt-gh-issues" % "0.0.1"
     }
 
 The only dependency this plugin requires is a Github user to authenticate as an a Github repository to point at, both defined as 2 item tuples in your `ProjectDefinition`.
