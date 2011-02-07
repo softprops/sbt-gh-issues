@@ -34,7 +34,7 @@ These tasks are broken down into three traits
 Some tasks listed above take arguments. Those are annotated with `<arg1> <arg2>`.
 If you forget what arguments a task takes, just execute the task with no args. This will reveal a `usage` statement to help. For arguments that are strings, be sure to double-quote their values ( `gh-open "something's wrong" "oh something is definitely wrong!"` )
 
-You for simplicity, you can can just mix in `gh.Issues` (includes all three) into your project definition.
+For simplicity, you can can just mix `gh.Issues` (includes all three) into your `ProjectDefinition`.
 
 Declare the gh issues plugin in your `PluginDefinition`.
 
