@@ -43,7 +43,7 @@ Declare the gh issues plugin in your `PluginDefinition`/
       val ghIssues = "me.lessis" % "gh-sbt-plugin" % "0.0.1"
     }
 
-The only dependency this plugin requires is a Github user to authenticate as an a Github repository to point at
+The only dependency this plugin requires is a Github user to authenticate as an a Github repository to point at, both defined as 2 item tuples in your `ProjectDefinition`.
 
     > cat project/build/project.scala
     import sbt._
@@ -55,8 +55,18 @@ The only dependency this plugin requires is a Github user to authenticate as an 
 
 Obviously, you will not want to check in your github username and password with your source code and push that to github :). To supply
 the `ghCredentials` tuple. You can use the `LocalGhCreds` function which assumes you have an externally defined `.gh`
-file containing your github username and password. This should follow the standard java properties file format
+file containing your github username and password. This should follow the standard Java [Properties](http://download.oracle.com/javase/6/docs/api/java/util/Properties.html) file format.
 
     > cat path/to/home/.gh
     username=your-gh-username
     password=your-gh-password
+
+Your `ProjectDefinition` would then become
+
+    > cat project/build/project.scala
+    import sbt._
+
+    class Project(info: ProjectInfo) extends DefaultProject(info) with gh.Issues {
+       def ghCredentials = gh.LocalGhCreds(log)
+       def ghRepository = (<gh-user>, <gh-repo>)
+    }
