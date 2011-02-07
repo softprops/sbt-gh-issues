@@ -2,6 +2,8 @@
 
 plugin for [github](http://github.com) [issues](http://develop.github.com/p/issues.html) for those `wired in` to [sbt](http://code.google.com/p/simple-build-tool/)
 
+![gh issues](https://github.com/downloads/softprops/sbt-gh-issues/sbt-gh-issues.jpg)
+
 ## usage
 
 This plugin adds several Github Issues related tasks to your project.
