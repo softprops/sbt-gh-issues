@@ -31,9 +31,12 @@ These tasks are broken down into three traits
      gh-comments <num> # lists all comments on a gh issue
      gh-comment <num> <comment> # adds a comment on a gh issue
 
-You for simplicity you can can just mix in `gh.Issues` (includes all three) into your project definition.
+Some tasks listed above take arguments. Those are annotated with `<arg1> <arg2>`.
+If you forget what arguments a task takes, just execute the task with no args. This will reveal a `usage` statement to help. For arguments that are strings, be sure to double-quote their values ( `gh-open "something's wrong" "oh something is definitely wrong!"` )
 
-Declare the gh issues plugin in your `PluginDefinition`/
+You for simplicity, you can can just mix in `gh.Issues` (includes all three) into your project definition.
+
+Declare the gh issues plugin in your `PluginDefinition`.
 
     > cat project/plugins/plugins.scala
     import sbt._
