@@ -31,6 +31,9 @@ These tasks are broken down into three traits
      gh-comments <num> # lists all comments on a gh issue
      gh-comment <num> <comment> # adds a comment on a gh issue
 
+To get a the full list available in the sbt prompt type
+
+     > gh<tab>
 Some tasks listed above take arguments. Those are annotated with `<arg1> <arg2>`.
 If you forget what arguments a task takes, just execute the task with no args. This will reveal a `usage` statement to help. For arguments that are strings, be sure to double-quote their values ( `gh-open "something's wrong" "oh something is definitely wrong!"` )
 
