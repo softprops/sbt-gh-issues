@@ -52,7 +52,7 @@ case class Comment(id: BigInt, user: String, gravatar: String, body: String, cre
 trait LabelTasks extends sbt.Project with IssuesApi with ColorizedLogging {
   import net.liftweb.json.JsonAST._
 
-  implicit def manyLabels[String](js: JValue) =
+  implicit def manyLabels(js: JValue) =
     for(l <- Labels.many(js)) yield l
 
   lazy val ghLabels = task {
