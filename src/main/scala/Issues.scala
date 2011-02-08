@@ -202,6 +202,20 @@ trait IssueTasks extends sbt.Project with IssuesApi with ColorizedLogging {
     case _ => task { Some("""usage: gh-open "<title>" "<description>" """) }
   } } describedAs("Opens a new Github Issue")
 
+  lazy val ghEdit = task { _ match {
+    case Array(num, title, desc) =>
+      try {
+        editIssue(num.toLong, title, desc) { (_: Option[Issue]) match {
+          case Some(is) => task {
+            println("""Editied issue %s "%s" as @%s""" format(is.number, is.title, is.user))
+            None
+          }
+          case _ => task { Some("Error editing issue") }
+        } }
+      } catch { case _ => task { Some("Invalid arguments num: %s, title: %s, desc: %s" format(num, title, desc)) } }
+    case _ => task { Some("""usage: gh-edit <num> "<title>" "<description>" """) }
+  } } describedAs("Edits a Github Issue")
+
   lazy val ghClose = task { _ match {
     case Array(num) =>
       closeIssue(num.toLong) { (_: Option[Issue]) match {
@@ -259,11 +273,11 @@ trait CommentTasks extends sbt.Project with IssuesApi with ColorizedLogging {
           case l => for (c <-l) commentListing(c)
         } }
         None
-      } } catch { case _ => task { Some("invalid arguments %s" format num) } }
+      } } catch { case _ => task { Some("Invalid arguments num: %s" format num) } }
   } } describedAs("Lists Comments on a Github Issue")
 
   lazy val ghComment = task { _ match {
-    case Array() => task { Some("""usage: gh-comment <num> ""comment"" """) }
+    case Array() => task { Some("""usage: gh-comment <num> ""<comment>"" """) }
     case Array(num, comm) => try {
       task {
         comment(num.toLong, comm) { (_: Option[Comment]) match {
@@ -271,7 +285,7 @@ trait CommentTasks extends sbt.Project with IssuesApi with ColorizedLogging {
           case _ => println("Comment not posted")
         } }
         None
-      } } catch { case _ => task { Some("invalid arguments %s %s" format(num, comm)) } }
+      } } catch { case _ => task { Some("Invalid arguments num: %s, comment: %s" format(num, comm)) } }
   } } describedAs("Posts a new Comment on a Github Issue")
 
 }
@@ -357,6 +371,17 @@ private [gh] trait IssuesApi {
     } catch { case StatusCode(c, _) => f(None) }
   }
 
+  def editIssue[A, B](num: Long, title: String, body: String)(f: Option[A] => B)(implicit one: One[A]) = {
+    val (user, pass) = auth
+    try {
+      http(github.POST.as_!(user, pass) / "edit" / ghUser / ghRepo / num.toString << Map(
+        "title" -> title, "body" -> body
+      ) ># { js =>
+        f(one(js))
+      })
+    } catch { case StatusCode(c, _) => f(None) }
+  }
+
   def closeIssue[A, B](num: Long)(f: Option[A] => B)(implicit one: One[A]) = {
     val (user, pass) = auth
     try {
@@ -366,14 +391,14 @@ private [gh] trait IssuesApi {
     } catch { case StatusCode(c, _) => f(None) }
   }
 
-  def labels[A, B](f: List[A] => B)(implicit many: Many[A]): B =
+  def labels[A, B](f: List[A] => B)(implicit many: Many[A]) =
     try {
       http(github / "labels" / ghUser / ghRepo ># { js =>
         f(many(js))
       })
     } catch { case StatusCode(c, _) => f(Nil) }
 
-  def addLabel[A, B](label: String, num: Long)(f: List[A] => B)(implicit many: Many[A]): B = {
+  def addLabel[A, B](label: String, num: Long)(f: List[A] => B)(implicit many: Many[A]) = {
     val (user, pass) = auth
     try {
       http(github.POST.as_!(user, pass) / "label" / "add" / ghUser / ghRepo / label / num.toString ># { js =>
@@ -382,7 +407,7 @@ private [gh] trait IssuesApi {
     } catch { case StatusCode(c, _) => f(Nil) }
   }
 
-  def removeLabel[A, B](label: String, num: Long)(f: List[A] => B)(implicit many: Many[A]): B = {
+  def removeLabel[A, B](label: String, num: Long)(f: List[A] => B)(implicit many: Many[A]) = {
     val (user, pass) = auth
     try {
       http(github.POST.as_!(user, pass) / "label" / "remove" / ghUser / ghRepo / label / num.toString ># { js =>
@@ -391,14 +416,14 @@ private [gh] trait IssuesApi {
     } catch { case StatusCode(c, _) => f(Nil) }
   }
 
-  def comments[A, B](num: Long)(f: List[A] => B)(implicit many: Many[A]): B =
+  def comments[A, B](num: Long)(f: List[A] => B)(implicit many: Many[A]) =
     try {
       http(github  / "comments" / ghUser / ghRepo / num.toString ># { js =>
         f(many(js))
       })
     } catch { case StatusCode(c, _) => f(Nil) }
 
-  def comment[A, B](id: Long, comment: String)(f: Option[A] => B)(implicit one: One[A]): B = {
+  def comment[A, B](id: Long, comment: String)(f: Option[A] => B)(implicit one: One[A]) = {
     val (user, pass) = auth
     try {
       http(github.POST.as_!(user, pass) / "comment" / ghUser / ghRepo / id.toString << Map(
