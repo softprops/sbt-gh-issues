@@ -80,4 +80,20 @@ Your `ProjectDefinition` would then become
        def ghRepository = (<gh-user>, <gh-repo>)
     }
 
+### Logging
+
+Some logging is colorized. The default options (which are overridable in your `ProjectDefinition`) are.
+
+    def ghUserColor = Console.BOLD
+    def ghIssueTitleColor = Console.BOLD
+    def ghIssueNumColor = Console.MAGENTA
+    def ghLabelColor = Console.BOLD
+
+I you would like to write out the logging yourself, override one of these logging methods.
+
+    def issueListing(issue: Issue): Unit
+    def issueDetail(issue: Issue): Unit
+    def commentListing(comment: Comment): Unit
+    def labelListing(label: String): Unit
+
 Doug Tangren (softprops) 2011
