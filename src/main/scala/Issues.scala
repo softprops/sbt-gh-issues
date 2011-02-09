@@ -1,5 +1,13 @@
 package gh
 
+import java.util.Date
+
+object GhDate {
+  import dispatch.liftjson.Js._
+  val time = datestr("yyyy/MM/dd kk:mm:ss Z")
+}
+import GhDate.time
+
 object Issues {
   import dispatch.liftjson.Js._
   import net.liftweb.json.JsonAST._
@@ -9,15 +17,15 @@ object Issues {
 
   val user = 'user ? str
   val gravatar = 'gravatar_id ? str
-  val updatedAt = 'updated_at ? str
+  val updatedAt = 'updated_at ? GhDate.time
   val votes = 'votes ? int
   val number = 'number ? int
   val position = 'position ? double
   val title = 'title ? str
   val body = 'body ? str
   val state = 'state ? str
-  val createdAt = 'created_at ? str
-  val closedAt = 'closed_at ? str
+  val createdAt = 'created_at ? time
+  val closedAt = 'closed_at ? time
   val labels = 'labels ? ary
 }
 
@@ -36,18 +44,18 @@ object Comments {
   def one(js: JValue) = for (JField("comment", field) <- js) yield field
 
   val gravatar = 'gravatar_id ? str
-  val createdAt = 'created_at ? str
+  val createdAt = 'created_at ? time
   val body = 'body ? str
-  val updatedAt = 'updated_at ? str
+  val updatedAt = 'updated_at ? time
   val id = 'id ? int
   val user = 'user ? str
 }
 
-case class Issue(user: String, gravatar: String, updatedAt: String, votes: BigInt, number: BigInt,
+case class Issue(user: String, gravatar: String, updatedAt: Date, votes: BigInt, number: BigInt,
                position: Double, title: String, body: String, state: String,
-               createdAt: String, labels: List[String])
+               createdAt: Date, labels: List[String])
 
-case class Comment(id: BigInt, user: String, gravatar: String, body: String, createdAt: String, updatedAt: String)
+case class Comment(id: BigInt, user: String, gravatar: String, body: String, createdAt: Date, updatedAt: Date)
 
 trait LabelTasks extends sbt.Project with IssuesApi with ColorizedLogging {
   import net.liftweb.json.JsonAST._

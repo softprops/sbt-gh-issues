@@ -24,6 +24,7 @@ trait Colors {
 }
 
 trait ColorizedLogging extends GhLogging with Colors {
+  import RelativeTime._
 
   def ghUserColor = Console.BOLD
 
@@ -44,7 +45,8 @@ trait ColorizedLogging extends GhLogging with Colors {
       color(Console.BOLD, ghIssueTitleColor) {
         print(" %s " format i.title)
       }
-      print("(@")
+      print(i.createdAt.relativeTime)
+      print(" (@")
       color(Console.BOLD, ghUserColor) {
         print(i.user)
       }
@@ -64,6 +66,7 @@ trait ColorizedLogging extends GhLogging with Colors {
         print(i.user)
       }
       print(") %s" format(colorizeLabels(i.labels)))
+      println("\t%s" format i.createdAt.relativeTime)
       println("\t%s\n" format i.body)
     }
 
@@ -73,7 +76,7 @@ trait ColorizedLogging extends GhLogging with Colors {
       color(Console.BOLD, ghUserColor) {
         print(c.user)
       }
-      print(" @ %s \n\t" format c.createdAt)
+      print(" @ %s \n\t" format c.createdAt.relativeTime)
       println(c.body)
     }
 
