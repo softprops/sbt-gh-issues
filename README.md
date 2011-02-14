@@ -17,6 +17,7 @@ These tasks are broken down into three traits
     gh-issue <num> # shows the details of a gh issue by number
     gh-open <title> <desc> # opens a new gh issue
     gh-close <num> # closes a gh issue by number
+    gh-edit <num> <new_title> <new_desc> # edits a gh issue
     gh-search-closed-issues <term> # Search for closed gh issues by terms
     gh-search-open-issues <term> # Search for open gh issues by terms
 
@@ -28,8 +29,8 @@ These tasks are broken down into three traits
 
 ### gh. CommentTasks
 
-     gh-comments <num> # lists all comments on a gh issue
-     gh-comment <num> <comment> # adds a comment on a gh issue
+    gh-comments <num> # lists all comments on a gh issue
+    gh-comment <num> <comment> # adds a comment on a gh issue
 
 To get a the full list available in the sbt prompt type
 

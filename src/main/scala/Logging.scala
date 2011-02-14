@@ -5,6 +5,7 @@ private [gh] trait GhLogging {
   def issueDetail(issue: Issue): Unit
   def commentListing(comment: Comment): Unit
   def labelListing(label: String): Unit
+  def repoListing(user: String, repo: String): Unit
 }
 
 trait Colors {
@@ -34,8 +35,12 @@ trait ColorizedLogging extends GhLogging with Colors {
 
   def ghLabelColor = Console.BOLD
 
-  private def colorizeLabels(l: List[String]) =
-    l.mkString("[" + ghLabelColor, Console.RESET + "," + ghLabelColor, Console.RESET + "]\n")
+  def userRepoColor = Console.MAGENTA
+
+  private def colorizeLabels(l: List[String]) = l match {
+    case Nil => "\n"
+    case _ => l.mkString("[" + ghLabelColor, Console.RESET + "," + ghLabelColor, Console.RESET + "]\n")
+  }
 
   def issueListing(i: Issue) =
     resetColor {
@@ -76,7 +81,7 @@ trait ColorizedLogging extends GhLogging with Colors {
       color(Console.BOLD, ghUserColor) {
         print(c.user)
       }
-      print(" @ %s \n\t" format c.createdAt.relativeTime)
+      print(" %s \n\t" format c.createdAt.relativeTime)
       println(c.body)
     }
 
@@ -84,6 +89,18 @@ trait ColorizedLogging extends GhLogging with Colors {
     resetColor {
       color(Console.BOLD, ghLabelColor) {
         println(l)
+      }
+    }
+
+  def repoListing(user: String, repo: String) =
+    resetColor {
+      print("using ")
+      color(userRepoColor) {
+        print(user)
+      }
+      print("/")
+      color(userRepoColor) {
+        println(repo)
       }
     }
 }

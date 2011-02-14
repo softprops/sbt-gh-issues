@@ -1,7 +1,0 @@
-# start your trackers
-
-* full support for [github][gh] [issues api][ghi] from sbt shell
-* colorized logging
-
-[gh]: http://github.com/
-[ghi]: http://develop.github.com/p/issues.html

@@ -1,0 +1,20 @@
+# start your trackers
+
+* full support for [github][gh] [issues api][ghi] from sbt shell
+* colorized logging
+* fixed [#3](https://github.com/softprops/sbt-gh-issues/issues/closed#issue/3)
+* fixed [#5](https://github.com/softprops/sbt-gh-issues/issues/closed#issue/5)
+* fixed [#8](https://github.com/softprops/sbt-gh-issues/issues/closed#issue/8)
+* fixed [#9](https://github.com/softprops/sbt-gh-issues/issues#issue/9)
+* fixed [#10](https://github.com/softprops/sbt-gh-issues/issues#issue/10)
+* fixed [#11](https://github.com/softprops/sbt-gh-issues/issues#issue/11)
+* [#6](https://github.com/softprops/sbt-gh-issues/issues#issue/6) is pending on a gh-issues api [issue](https://github.com/develop/develop.github.com/issues#issue/24)
+
+Got an issue or suggestion for sbt-gh-issues? Let me know @ https://github.com/softprops/sbt-gh-issues/issues or
+
+    > sbt
+    ...
+    > gh-open "what you want" "how you want it"
+
+[gh]: http://github.com/
+[ghi]: http://develop.github.com/p/issues.html

@@ -57,47 +57,53 @@ case class Issue(user: String, gravatar: String, updatedAt: Date, votes: BigInt,
 
 case class Comment(id: BigInt, user: String, gravatar: String, body: String, createdAt: Date, updatedAt: Date)
 
-trait LabelTasks extends sbt.Project with IssuesApi with ColorizedLogging {
+trait MethodTasks extends sbt.Project {
+  /** clean up some brackets with implicit convertions from Option[String] to task */
+  implicit def os2t(o: Option[String]) = task { o }
+}
+
+trait LabelTasks extends sbt.Project with ColorizedLogging with MethodTasks {
+  self: IssuesProvider with GhInfo  =>
+
   import net.liftweb.json.JsonAST._
 
   implicit def manyLabels(js: JValue) =
     for(l <- Labels.many(js)) yield l
 
   lazy val ghLabels = task {
-    labels {
-      println("Labels for %s/%s" format(ghUser, ghRepo))
+    issues.labels {
       (_: List[String]).foreach(labelListing)
     }
     None
-  } describedAs("Lists Labels associated with Github repo %s/%s" format(ghUser, ghRepo))
+  } describedAs("Lists Labels associated with Github repo")
 
   lazy val ghAddLabel = task { _ match {
     case Array(label, num) => try {
-      task {
-        addLabel(label, num.toLong) { labels: List[String] =>
-          println("""Added label "%s" to Issue %s""" format(label, num))
-        }
-        None
+      val (user, repo) = ghRepository
+      issues.addLabel(label, num.toLong) { labels: List[String] =>
+        println("""Added label "%s" to Issue %s of %s/%s""" format(label, num, user, repo))
       }
-    } catch { case _ => task {  Some("invalid arguments label: %s, num: %s" format(label, num)) } }
-    case _ => task { Some("""usage: gh-add-label "<label>" <num>""") }
+      None
+    } catch { case _ => Some("invalid arguments label: %s, num: %s" format(label, num)) }
+    case _ => Some("""usage: gh-add-label "<label>" <num>""")
   } } describedAs("Adds a Label to a Github Issue")
 
   lazy val ghRemoveLabel = task { _ match {
     case Array(label, num) => try {
-      task {
-        removeLabel(label, num.toLong) { labels: List[String] =>
-          println("""Removed label "%s" from Issue %s""" format(label, num))
-        }
-        None
+      val (user, repo) = ghRepository
+      issues.removeLabel(label, num.toLong) { labels: List[String] =>
+        println("""Removed label "%s" from Issue %s of %s/%s""" format(label, num, user, repo))
       }
-    } catch { case _ => task {  Some("invalid arguments label: %s, num:%s" format(label, num)) } }
-    case _ => task { Some("usage: gh-remove-label <label> <num>") }
+      None
+    } catch { case _ => Some("invalid arguments label: %s, num:%s" format(label, num)) }
+    case _ => Some("usage: gh-remove-label <label> <num>")
   } } describedAs("Removes a Label from a gh issue")
 
 }
 
-trait IssueTasks extends sbt.Project with IssuesApi with ColorizedLogging {
+trait IssueTasks extends sbt.Project with ColorizedLogging with MethodTasks {
+  self: IssuesProvider with GhInfo  =>
+
   import net.liftweb.json.JsonAST._
 
   implicit def one(js: JValue) =
@@ -141,7 +147,7 @@ trait IssueTasks extends sbt.Project with IssuesApi with ColorizedLogging {
       } } catch { case dispatch.StatusCode(c,_) => Nil }
 
   lazy val ghIssue = task { _ match {
-      case Array(num) => issue(num.toLong) { (_: Option[Issue]) match {
+      case Array(num) => issues.issue(num.toLong) { (_: Option[Issue]) match {
         case Some(is) => task {
           issueDetail(is)
           None
@@ -153,91 +159,94 @@ trait IssueTasks extends sbt.Project with IssuesApi with ColorizedLogging {
   } describedAs("Shows a Github Issue by number")
 
   lazy val ghIssues = task {
-    issues { (_: List[Issue]) match {
+    issues.issues { (_: List[Issue]) match {
       case Nil => println("This project has no issues (at least no documented issues)")
       case l =>
-        println("Open issues")
-      for(is <- l) issueListing(is)
+        val (user, repo) = ghRepository
+        println("Open issues for %s/%s" format(user, repo))
+        for(is <- l) issueListing(is)
     } }
     None
   } describedAs("Lists open github issues")
 
   lazy val ghClosedIssues = task {
-    closedIssues { (_: List[Issue]) match {
+    issues.closedIssues { (_: List[Issue]) match {
       case Nil => println("This project has no closed issues.")
       case l =>
-        println("Closed issues")
+        val (user, repo) = ghRepository
+        println("Closed issues for %s/%s" format(user, repo))
         for(is <- l) issueListing(is)
     } }
     None
   } describedAs("Lists closed Github Issues")
 
   lazy val ghSearchOpenIssues = task { _ match {
-    case Array() => task { Some("usage: gh-search-open-issues 'terms to search for'") }
-    case terms => task {
-      searchOpen(terms.mkString(" ")) { (_: List[Issue]) match {
-        case Nil => println("no open issues with the terms %s" format terms.mkString(" "))
+    case Array() => Some("usage: gh-search-open-issues 'terms to search for'")
+    case terms =>
+      val (user, repo) = ghRepository
+      issues.searchOpen(terms.mkString(" ")) { (_: List[Issue]) match {
+        case Nil => println("no open issues with the terms %s for %s/%s" format(terms.mkString(" "), user, repo))
         case l =>
-          println("%s search results" format l.size)
+          println("%s search results for %s/%s" format(l.size, user, repo))
           for(is <- l) issueListing(is)
       } }
       None
-    }
   } } describedAs("Search for open Github Issues by terms")
 
   lazy val ghSearchClosedIssues = task { _ match {
     case Array() => task { Some("usage: gh-search-closed-issues 'terms to search for'") }
-    case terms => task {
-      searchClosed(terms.mkString(" ")) { (_: List[Issue]) match {
-        case Nil => println("no closed issues with the terms %s" format terms.mkString(" "))
+    case terms =>
+      val (user, repo) = ghRepository
+      issues.searchClosed(terms.mkString(" ")) { (_: List[Issue]) match {
+        case Nil => println("no closed issues with the terms %s for %s/%s" format(terms.mkString(" "), user, repo))
         case l =>
           println("%s search results" format l.size)
           for(is <- l) issueListing(is)
       } }
       None
-    }
   } } describedAs("Search for closed Github Issues by terms")
 
   lazy val ghOpen = task { _ match {
     case Array(title, desc) =>
-      openIssue(title, desc) { (_: Option[Issue]) match {
-        case Some(is) => task {
-          println("""Opened issue %s "%s" as @%s""" format(is.number, is.title, is.user))
+      issues.openIssue(title, desc) { (_: Option[Issue]) match {
+        case Some(is) =>
+          val (user, repo) = ghRepository
+          println("""Opened issue %s "%s" as @%s for %s/%s""" format(is.number, is.title, is.user, user, repo))
           None
-        }
-        case _ => task { Some("error creating issue") }
+        case _ => Some("error creating issue")
       } }
-    case _ => task { Some("""usage: gh-open "<title>" "<description>" """) }
+    case _ => Some("""usage: gh-open "<title>" "<description>" """)
   } } describedAs("Opens a new Github Issue")
 
   lazy val ghEdit = task { _ match {
     case Array(num, title, desc) =>
       try {
-        editIssue(num.toLong, title, desc) { (_: Option[Issue]) match {
-          case Some(is) => task {
-            println("""Editied issue %s "%s" as @%s""" format(is.number, is.title, is.user))
+        issues.editIssue(num.toLong, title, desc) { (_: Option[Issue]) match {
+          case Some(is) =>
+            val (user, repo) = ghRepository
+            println("""Edited issue %s "%s" as @%s for %s/%s""" format(is.number, is.title, is.user, user, repo))
             None
-          }
-          case _ => task { Some("Error editing issue") }
+          case _ => Some("Error editing issue")
         } }
-      } catch { case _ => task { Some("Invalid arguments num: %s, title: %s, desc: %s" format(num, title, desc)) } }
-    case _ => task { Some("""usage: gh-edit <num> "<title>" "<description>" """) }
+      } catch { case _ => Some("Invalid arguments num: %s, title: %s, desc: %s" format(num, title, desc)) }
+    case _ => Some("""usage: gh-edit <num> "<title>" "<description>" """)
   } } describedAs("Edits a Github Issue")
 
   lazy val ghClose = task { _ match {
     case Array(num) =>
-      closeIssue(num.toLong) { (_: Option[Issue]) match {
-        case Some(is) => task {
-          println("""Closed issue %s "%s" as @%s""" format(is.number, is.title, is.user))
+      issues.closeIssue(num.toLong) { (_: Option[Issue]) match {
+        case Some(is) =>
+          val (user, repo) = ghRepository
+          println("""Closed issue %s "%s" as @%s for %s/%s""" format(is.number, is.title, is.user, user, repo))
           None
-        }
-        case _ => task { Some("error creating issue") }
+        case _ => Some("error creating issue")
       } }
-    case _ => task { Some("usage: gh-close <num>") }
+    case _ => Some("usage: gh-close <num>")
   } } describedAs("Closes a Github Issue")
 }
 
-trait CommentTasks extends sbt.Project with IssuesApi with ColorizedLogging {
+trait CommentTasks extends sbt.Project with ColorizedLogging with MethodTasks {
+  self: IssuesProvider with GhInfo =>
   import net.liftweb.json.JsonAST._
 
   implicit def oneComment(js: JValue) =
@@ -274,32 +283,61 @@ trait CommentTasks extends sbt.Project with IssuesApi with ColorizedLogging {
   lazy val ghComments = task { _ match {
     case Array() => task { Some("usage: gh-comments <num>") }
     case Array(num) => try {
-      task {
-        println("Comments on issue %s" format num)
-        comments(num.toLong) { (_: List[Comment]) match {
+        val (user, repo) = ghRepository
+        println("Comments on issue %s for %s/%s" format(num, user, repo))
+        issues.comments(num.toLong) { (_: List[Comment]) match {
           case Nil => println("There were no comments on this issue")
           case l => for (c <-l) commentListing(c)
         } }
         None
-      } } catch { case _ => task { Some("Invalid arguments num: %s" format num) } }
+      } catch { case _ => Some("Invalid arguments num: %s" format num) }
   } } describedAs("Lists Comments on a Github Issue")
 
   lazy val ghComment = task { _ match {
     case Array() => task { Some("""usage: gh-comment <num> ""<comment>"" """) }
     case Array(num, comm) => try {
-      task {
-        comment(num.toLong, comm) { (_: Option[Comment]) match {
-          case Some(c) => println("""Posted comment "%s" on issue %s as @%s""" format(c.body, num, c.user))
+        val (user, repo) = ghRepository
+        issues.comment(num.toLong, comm) { (_: Option[Comment]) match {
+          case Some(c) => println("""Posted comment "%s" on issue %s as @%s for %s/%s""" format(
+            c.body, num, c.user, user, repo)
+          )
           case _ => println("Comment not posted")
         } }
         None
-      } } catch { case _ => task { Some("Invalid arguments num: %s, comment: %s" format(num, comm)) } }
+      } catch { case _ => Some("Invalid arguments num: %s, comment: %s" format(num, comm)) }
   } } describedAs("Posts a new Comment on a Github Issue")
 
 }
 
 /** Mixin for github.com issue tracking and labeling */
-trait Issues extends IssueTasks with LabelTasks with CommentTasks
+trait Issues extends IssueTasks
+     with LabelTasks
+     with CommentTasks
+     with DefaultIssuesProvider
+     with GhInfo
+
+trait IssuesProvider {
+  self: GhInfo =>
+
+  def issues: IssuesApi
+}
+
+trait GhInfo {
+  /** (username, reponame) */
+  def ghRepository: (String, String)
+
+  /** (username, password) */
+  def ghCredentials: (String, String)
+}
+
+/** Preconfigured IssuesProvider */
+trait DefaultIssuesProvider extends IssuesProvider {
+  self: GhInfo =>
+
+  lazy val issues = new IssuesApi {
+    val ghInfo = self
+  }
+}
 
 private [gh] trait IssuesApi {
   import dispatch._
@@ -312,26 +350,22 @@ private [gh] trait IssuesApi {
   type One[A] = JValue => Option[A]
   type Many[A] = JValue => List[A]
 
+  val ghInfo: GhInfo
+
+  lazy val ghRepo = ghInfo.ghRepository._2
+
+  lazy val ghUser = ghInfo.ghRepository._1
+
+  lazy val auth = ghInfo.ghCredentials
+
   private [gh] val github = :/("github.com") / "api" / "v2" / "json" / "issues"
 
-  private [gh] val http = new Http {
+  private [gh] def http = new Http {
     /** quiet dispatch request logging */
     override def make_logger = new Logger {
       def info(msg: String, items: Any*) = ()
     }
   }
-
-  /** (username, reponame) */
-  def ghRepository: (String, String)
-
-  lazy val ghRepo = ghRepository._2
-
-  lazy val ghUser = ghRepository._1
-
-  /** (username, password) */
-  def ghCredentials: (String, String)
-
-  lazy val auth = ghCredentials
 
   def issue[A, B](num: Long)(f: Option[A] => B)(implicit one: One[A]) =
     try {
