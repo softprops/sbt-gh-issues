@@ -10,6 +10,8 @@
 * fixed [#11](https://github.com/softprops/sbt-gh-issues/issues#issue/11)
 * [#6](https://github.com/softprops/sbt-gh-issues/issues#issue/6) is pending on a gh-issues api [issue](https://github.com/develop/develop.github.com/issues#issue/24)
 
+See the [readme](https://github.com/softprops/sbt-gh-issues/#readme) for configuration
+
 Got an issue or suggestion for sbt-gh-issues? Let me know @ https://github.com/softprops/sbt-gh-issues/issues or
 
     > sbt
