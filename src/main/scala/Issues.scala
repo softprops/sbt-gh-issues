@@ -123,7 +123,7 @@ trait IssueTasks extends sbt.Project with ColorizedLogging with MethodTasks {
         labels   <- Some((for(JString(label) <- Issues.labels(f)) yield label): List[String])
       } yield {
         Issue(user, grav, updated, votes, number, position, title, body, state, created, labels)
-      }).headOption
+      }).firstOption
     } catch { case dispatch.StatusCode(c, _) => None }
 
   implicit def many(js: JValue) =
@@ -261,7 +261,7 @@ trait CommentTasks extends sbt.Project with ColorizedLogging with MethodTasks {
         updatedAt <- Comments.updatedAt(f)
       } yield {
         Comment(id, user, gravatar, body, createdAt, updatedAt)
-      }).headOption
+      }).firstOption
     } catch { case dispatch.StatusCode(c, _) => None }
 
   implicit def manyComments(js: JValue) =
