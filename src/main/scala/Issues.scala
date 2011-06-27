@@ -63,9 +63,11 @@ case class Comment(id: BigInt, user: String, gravatar: String, body: String,
 
 
 // sbt should resolve this as the plugin
-object SbtIssues extends LabelTasks with IssueTasks with CommentTasks
+object SbtIssues extends Plugin {
+  override def settings = LabelTasks.settings ++ IssueTasks.settings ++ CommentTasks.settings
+}
 
-trait LabelTasks extends Plugin with ColorizedLogging {
+object LabelTasks extends ColorizedLogging {
   import net.liftweb.json.JsonAST._
   implicit def manyLabels(js: JValue) = for(l <- Labels.many(js)) yield l
 
@@ -73,7 +75,7 @@ trait LabelTasks extends Plugin with ColorizedLogging {
   val ghAddLabel = InputKey[Unit]("gh-add-label", "Adds a Label to a Github Issue")
   val ghRemoveLabel = InputKey[Unit]("gh-remove-label", "Removes a Label from a gh issue")
 
-  override def settings = Github.settings ++ Seq(
+  def settings = Github.settings ++ Seq(
     ghLabels <<= inputTask { (argstask: TaskKey[Seq[String]]) =>
       (argstask, Github.api) map { (args, api) =>
         api.labels {
@@ -112,7 +114,7 @@ trait LabelTasks extends Plugin with ColorizedLogging {
 
 }
 
-trait IssueTasks extends Plugin with ColorizedLogging {
+object IssueTasks extends ColorizedLogging {
   import net.liftweb.json.JsonAST._
 
   implicit def one(js: JValue) =
@@ -164,7 +166,7 @@ trait IssueTasks extends Plugin with ColorizedLogging {
   val ghEdit = InputKey[Unit]("gh-edit", "Edits a Github Issue")
   val ghClose = InputKey[Unit]("gh-close", "Closes a Github Issue")
 
-  override def settings = Github.settings ++ Seq(
+  def settings = Github.settings ++ Seq(
     ghIssue <<= inputTask {  (argTask: TaskKey[Seq[String]]) =>
       (argTask, Github.api, streams) map { (args, api, out) =>
         args match {
@@ -281,7 +283,7 @@ trait IssueTasks extends Plugin with ColorizedLogging {
     })
 }
 
-trait CommentTasks extends Plugin with ColorizedLogging {
+object CommentTasks extends ColorizedLogging {
   import net.liftweb.json.JsonAST._
 
   implicit def oneComment(js: JValue) =
@@ -318,7 +320,7 @@ trait CommentTasks extends Plugin with ColorizedLogging {
   val ghComments = InputKey[Unit]("gh-comments", "Lists Comments on a Github Issue")
   val ghComment = InputKey[Unit]("gh-comment", "Posts a new Comment on a Github Issue")
 
-  override def settings = Github.settings ++ Seq(
+  def settings = Github.settings ++ Seq(
     ghComments <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
       (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
         args match {
