@@ -90,7 +90,7 @@ Some logging is colorized. The default options (which are overridable in your `P
     def ghIssueNumColor = Console.MAGENTA
     def ghLabelColor = Console.BOLD
 
-I you would like to write out the logging yourself, override one of these logging methods.
+If you would like to write out the logging yourself, override one of these logging methods.
 
     def issueListing(issue: Issue): Unit
     def issueDetail(issue: Issue): Unit
