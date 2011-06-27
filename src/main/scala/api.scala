@@ -19,7 +19,7 @@ private [gh] trait IssuesApi {
 
   private [gh] val github = :/("github.com") / "api" / "v2" / "json" / "issues"
 
-  private [gh] def http = new Http /*with NoLogging*/
+  private [gh] def http = new Http with NoLogging
 
   def issue[A, B](num: Long)(f: Option[A] => B)(implicit one: One[A]) =
     try {
