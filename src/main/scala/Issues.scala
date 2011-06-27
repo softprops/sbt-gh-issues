@@ -1,5 +1,8 @@
 package gh
 
+import sbt._
+import Keys._
+
 import java.util.Date
 
 object GhDate {
@@ -32,8 +35,8 @@ object Issues {
 object Labels {
   import dispatch.liftjson.Js._
   import net.liftweb.json.JsonAST._
-
-  def many(js: JValue) = for(JArray(value) <- js \ "labels"; JString(label) <- value) yield label
+  def many(js: JValue) =
+    for(JArray(value) <- js \ "labels"; JString(label) <- value) yield label
 }
 
 object Comments {
@@ -51,59 +54,65 @@ object Comments {
   val user = 'user ? str
 }
 
-case class Issue(user: String, gravatar: String, updatedAt: Date, votes: BigInt, number: BigInt,
-               position: Double, title: String, body: String, state: String,
-               createdAt: Date, labels: List[String])
+case class Issue(user: String, gravatar: String, updatedAt: Date, votes: BigInt,
+                 number: BigInt, position: Double, title: String, body: String,
+                 state: String, createdAt: Date, labels: List[String])
 
-case class Comment(id: BigInt, user: String, gravatar: String, body: String, createdAt: Date, updatedAt: Date)
+case class Comment(id: BigInt, user: String, gravatar: String, body: String,
+                   createdAt: Date, updatedAt: Date)
 
-trait MethodTasks extends sbt.Project {
-  /** clean up some brackets with implicit convertions from Option[String] to task */
-  implicit def os2t(o: Option[String]) = task { o }
-}
 
-trait LabelTasks extends sbt.Project with ColorizedLogging with MethodTasks {
-  self: IssuesProvider with GhInfo  =>
+// sbt should resolve this as the plugin
+object SbtIssues extends LabelTasks with IssueTasks with CommentTasks
 
+trait LabelTasks extends Plugin with ColorizedLogging {
   import net.liftweb.json.JsonAST._
+  implicit def manyLabels(js: JValue) = for(l <- Labels.many(js)) yield l
 
-  implicit def manyLabels(js: JValue) =
-    for(l <- Labels.many(js)) yield l
+  val ghLabels = InputKey[Unit]("gh-labels", "Lists Labels associated with Github repo")
+  val ghAddLabel = InputKey[Unit]("gh-add-label", "Adds a Label to a Github Issue")
+  val ghRemoveLabel = InputKey[Unit]("gh-remove-label", "Removes a Label from a gh issue")
 
-  lazy val ghLabels = task {
-    issues.labels {
-      (_: List[String]).foreach(labelListing)
-    }
-    None
-  } describedAs("Lists Labels associated with Github repo")
-
-  lazy val ghAddLabel = task { _ match {
-    case Array(label, num) => try {
-      val (user, repo) = ghRepository
-      issues.addLabel(label, num.toLong) { labels: List[String] =>
-        println("""Added label "%s" to Issue %s of %s/%s""" format(label, num, user, repo))
+  override def settings = Github.settings ++ Seq(
+    ghLabels <<= inputTask { (argstask: TaskKey[Seq[String]]) =>
+      (argstask, Github.api) map { (args, api) =>
+        api.labels {
+          (_: List[String]).foreach(labelListing)
+        }
       }
-      None
-    } catch { case _ => Some("invalid arguments label: %s, num: %s" format(label, num)) }
-    case _ => Some("""usage: gh-add-label "<label>" <num>""")
-  } } describedAs("Adds a Label to a Github Issue")
+    },
 
-  lazy val ghRemoveLabel = task { _ match {
-    case Array(label, num) => try {
-      val (user, repo) = ghRepository
-      issues.removeLabel(label, num.toLong) { labels: List[String] =>
-        println("""Removed label "%s" from Issue %s of %s/%s""" format(label, num, user, repo))
+    ghAddLabel <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+         args match {
+          case label :: num :: Nil => try {
+            val (user, repo) = repository
+            api.addLabel(label, num.toLong) { labels: List[String] =>
+              out.log.info("""Added label "%s" to Issue %s of %s/%s""" format(label, num, user, repo))
+            }
+          } catch { case _ => out.log.warn("invalid arguments label: %s, num: %s" format(label, num)) }
+          case _ => out.log.warn("""usage: gh-add-label "<label>" <num>""")
+        }
       }
-      None
-    } catch { case _ => Some("invalid arguments label: %s, num:%s" format(label, num)) }
-    case _ => Some("usage: gh-remove-label <label> <num>")
-  } } describedAs("Removes a Label from a gh issue")
+    },
+
+    ghRemoveLabel <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+        args match {
+          case label :: num :: Nil=> try {
+            val (user, repo) = repository
+            api.removeLabel(label, num.toLong) { labels: List[String] =>
+              out.log.info("""Removed label "%s" from Issue %s of %s/%s""" format(label, num, user, repo))
+            }
+          } catch { case _ => out.log.warn("invalid arguments label: %s, num:%s" format(label, num)) }
+          case _ => out.log.warn("usage: gh-remove-label <label> <num>")
+        }
+      }
+    })
 
 }
 
-trait IssueTasks extends sbt.Project with ColorizedLogging with MethodTasks {
-  self: IssuesProvider with GhInfo  =>
-
+trait IssueTasks extends Plugin with ColorizedLogging {
   import net.liftweb.json.JsonAST._
 
   implicit def one(js: JValue) =
@@ -123,7 +132,7 @@ trait IssueTasks extends sbt.Project with ColorizedLogging with MethodTasks {
         labels   <- Some((for(JString(label) <- Issues.labels(f)) yield label): List[String])
       } yield {
         Issue(user, grav, updated, votes, number, position, title, body, state, created, labels)
-      }).firstOption
+      }).headOption
     } catch { case dispatch.StatusCode(c, _) => None }
 
   implicit def many(js: JValue) =
@@ -146,107 +155,133 @@ trait IssueTasks extends sbt.Project with ColorizedLogging with MethodTasks {
         Issue(user, grav, updated, votes, number, position, title, body, state, created, labels)
       } } catch { case dispatch.StatusCode(c,_) => Nil }
 
-  lazy val ghIssue = task { _ match {
-      case Array(num) => issues.issue(num.toLong) { (_: Option[Issue]) match {
-        case Some(is) => task {
-          issueDetail(is)
-          None
+  val ghIssue = InputKey[Unit]("gh-issue", "Shows a Github Issue by number")
+  val ghIssues = InputKey[Unit]("gh-issues", "Lists open github issues")
+  val ghClosedIssues = InputKey[Unit]("gh-closed-issues", "Lists closed Github Issues")
+  val ghSearchOpenIssues = InputKey[Unit]("gh-search-open-issues","Search for open Github Issues by terms")
+  val ghSearchClosedIssues = InputKey[Unit]("gh-search-closed-issues", "Search for closed Github Issues by terms")
+  val ghOpen = InputKey[Unit]("gh-open", "Opens a new Github Issue")
+  val ghEdit = InputKey[Unit]("gh-edit", "Edits a Github Issue")
+  val ghClose = InputKey[Unit]("gh-close", "Closes a Github Issue")
+
+  override def settings = Github.settings ++ Seq(
+    ghIssue <<= inputTask {  (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, streams) map { (args, api, out) =>
+        args match {
+         case num :: Nil =>
+           api.issue(num.toLong) { (_: Option[Issue]) match {
+             case Some(is) => issueDetail(is)
+             case _ => out.log.info("This project has no issue %s" format num)
+           } }
+         case _ => task { Some("usage: gh-issue <num>") }
         }
-        case _ => task { Some("This project has no issue %s" format num) }
-      } }
-      case _ => task { Some("usage: gh-issue <num>") }
-    }
-  } describedAs("Shows a Github Issue by number")
+      }
+    },
 
-  lazy val ghIssues = task {
-    issues.issues { (_: List[Issue]) match {
-      case Nil => println("This project has no issues (at least no documented issues)")
-      case l =>
-        val (user, repo) = ghRepository
-        println("Open issues for %s/%s" format(user, repo))
-        for(is <- l) issueListing(is)
-    } }
-    None
-  } describedAs("Lists open github issues")
+    ghIssues <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+       (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+         api.issues { (_: List[Issue]) match {
+           case Nil => out.log.info("This project has no issues (at least no documented issues)")
+           case l =>
+             val (user, repo) = repository
+             out.log.info("Open issues for %s/%s" format(user, repo))
+             for(is <- l) issueListing(is)
+         } }
+      }
+    },
 
-  lazy val ghClosedIssues = task {
-    issues.closedIssues { (_: List[Issue]) match {
-      case Nil => println("This project has no closed issues.")
-      case l =>
-        val (user, repo) = ghRepository
-        println("Closed issues for %s/%s" format(user, repo))
-        for(is <- l) issueListing(is)
-    } }
-    None
-  } describedAs("Lists closed Github Issues")
-
-  lazy val ghSearchOpenIssues = task { _ match {
-    case Array() => Some("usage: gh-search-open-issues 'terms to search for'")
-    case terms =>
-      val (user, repo) = ghRepository
-      issues.searchOpen(terms.mkString(" ")) { (_: List[Issue]) match {
-        case Nil => println("no open issues with the terms %s for %s/%s" format(terms.mkString(" "), user, repo))
-        case l =>
-          println("%s search results for %s/%s" format(l.size, user, repo))
-          for(is <- l) issueListing(is)
-      } }
-      None
-  } } describedAs("Search for open Github Issues by terms")
-
-  lazy val ghSearchClosedIssues = task { _ match {
-    case Array() => task { Some("usage: gh-search-closed-issues 'terms to search for'") }
-    case terms =>
-      val (user, repo) = ghRepository
-      issues.searchClosed(terms.mkString(" ")) { (_: List[Issue]) match {
-        case Nil => println("no closed issues with the terms %s for %s/%s" format(terms.mkString(" "), user, repo))
-        case l =>
-          println("%s search results" format l.size)
-          for(is <- l) issueListing(is)
-      } }
-      None
-  } } describedAs("Search for closed Github Issues by terms")
-
-  lazy val ghOpen = task { _ match {
-    case Array(title, desc) =>
-      issues.openIssue(title, desc) { (_: Option[Issue]) match {
-        case Some(is) =>
-          val (user, repo) = ghRepository
-          println("""Opened issue %s "%s" as @%s for %s/%s""" format(is.number, is.title, is.user, user, repo))
-          None
-        case _ => Some("error creating issue")
-      } }
-    case _ => Some("""usage: gh-open "<title>" "<description>" """)
-  } } describedAs("Opens a new Github Issue")
-
-  lazy val ghEdit = task { _ match {
-    case Array(num, title, desc) =>
-      try {
-        issues.editIssue(num.toLong, title, desc) { (_: Option[Issue]) match {
-          case Some(is) =>
-            val (user, repo) = ghRepository
-            println("""Edited issue %s "%s" as @%s for %s/%s""" format(is.number, is.title, is.user, user, repo))
-            None
-          case _ => Some("Error editing issue")
+    ghClosedIssues <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+        api.closedIssues { (_: List[Issue]) match {
+          case Nil => out.log.info("This project has no closed issues.")
+          case l =>
+            val (user, repo) = repository
+            out.log.info("Closed issues for %s/%s" format(user, repo))
+            for(is <- l) issueListing(is)
         } }
-      } catch { case _ => Some("Invalid arguments num: %s, title: %s, desc: %s" format(num, title, desc)) }
-    case _ => Some("""usage: gh-edit <num> "<title>" "<description>" """)
-  } } describedAs("Edits a Github Issue")
+      }
+    },
 
-  lazy val ghClose = task { _ match {
-    case Array(num) =>
-      issues.closeIssue(num.toLong) { (_: Option[Issue]) match {
-        case Some(is) =>
-          val (user, repo) = ghRepository
-          println("""Closed issue %s "%s" as @%s for %s/%s""" format(is.number, is.title, is.user, user, repo))
-          None
-        case _ => Some("error creating issue")
-      } }
-    case _ => Some("usage: gh-close <num>")
-  } } describedAs("Closes a Github Issue")
+    ghSearchOpenIssues <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+        args match {
+          case Nil => out.log.warn("usage: gh-search-open-issues 'terms to search for'")
+          case terms =>
+            val (user, repo) = repository
+            api.searchOpen(terms.mkString(" ")) { (_: List[Issue]) match {
+              case Nil => out.log.info("no open issues with the terms %s for %s/%s" format(terms.mkString(" "), user, repo))
+              case l =>
+                out.log.info("%s search results for %s/%s" format(l.size, user, repo))
+                for(is <- l) issueListing(is)
+           } }
+        }
+      }
+    },
+
+    ghSearchClosedIssues <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+        args match {
+          case Nil => out.log.warn("usage: gh-search-closed-issues 'terms to search for'")
+          case terms =>
+            val (user, repo) = repository
+            api.searchClosed(terms.mkString(" ")) { (_: List[Issue]) match {
+              case Nil => out.log.info("no closed issues with the terms %s for %s/%s" format(terms.mkString(" "), user, repo))
+              case l =>
+                out.log.info("%s search results" format l.size)
+                for(is <- l) issueListing(is)
+            } }
+        }
+      }
+    },
+
+    ghOpen <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+        args match {
+          case title :: desc :: Nil =>
+            api.openIssue(title, desc) { (_: Option[Issue]) match {
+              case Some(is) =>
+                val (user, repo) = repository
+                out.log.info("""Opened issue %s "%s" as @%s for %s/%s""" format(is.number, is.title, is.user, user, repo))
+              case _ => out.log.warn("error creating issue")
+            } }
+          case _ => out.log.warn("""usage: gh-open "<title>" "<description>" """)
+        }
+      }
+    },
+
+    ghEdit <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+        args match {
+          case num :: title :: desc :: Nil => try {
+            api.editIssue(num.toLong, title, desc) { (_: Option[Issue]) match {
+              case Some(is) =>
+                val (user, repo) = repository
+                out.log.info("""Edited issue %s "%s" as @%s for %s/%s""" format(is.number, is.title, is.user, user, repo))
+             case _ => out.log.warn("Error editing issue")
+            } }
+          } catch { case _ => out.log.warn("Invalid arguments num: %s, title: %s, desc: %s" format(num, title, desc)) }
+          case _ => out.log.warn("""usage: gh-edit <num> "<title>" "<description>" """)
+        }
+      }
+    },
+
+    ghClose <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+        args match {
+          case num :: Nil =>
+            api.closeIssue(num.toLong) { (_: Option[Issue]) match {
+              case Some(is) =>
+                val (user, repo) = repository
+                out.log.info("""Closed issue %s "%s" as @%s for %s/%s""" format(is.number, is.title, is.user, user, repo))
+              case _ => out.log.warn("error creating issue")
+            } }
+          case _ => out.log.warn("usage: gh-close <num>")
+        }
+      }
+    })
 }
 
-trait CommentTasks extends sbt.Project with ColorizedLogging with MethodTasks {
-  self: IssuesProvider with GhInfo =>
+trait CommentTasks extends Plugin with ColorizedLogging {
   import net.liftweb.json.JsonAST._
 
   implicit def oneComment(js: JValue) =
@@ -261,7 +296,7 @@ trait CommentTasks extends sbt.Project with ColorizedLogging with MethodTasks {
         updatedAt <- Comments.updatedAt(f)
       } yield {
         Comment(id, user, gravatar, body, createdAt, updatedAt)
-      }).firstOption
+      }).headOption
     } catch { case dispatch.StatusCode(c, _) => None }
 
   implicit def manyComments(js: JValue) =
@@ -280,199 +315,58 @@ trait CommentTasks extends sbt.Project with ColorizedLogging with MethodTasks {
      }
    } catch { case dispatch.StatusCode(c, _) => Nil }
 
-  lazy val ghComments = task { _ match {
-    case Array() => task { Some("usage: gh-comments <num>") }
-    case Array(num) => try {
-        val (user, repo) = ghRepository
-        println("Comments on issue %s for %s/%s" format(num, user, repo))
-        issues.comments(num.toLong) { (_: List[Comment]) match {
-          case Nil => println("There were no comments on this issue")
-          case l => for (c <-l) commentListing(c)
-        } }
-        None
-      } catch { case _ => Some("Invalid arguments num: %s" format num) }
-  } } describedAs("Lists Comments on a Github Issue")
+  val ghComments = InputKey[Unit]("gh-comments", "Lists Comments on a Github Issue")
+  val ghComment = InputKey[Unit]("gh-comment", "Posts a new Comment on a Github Issue")
 
-  lazy val ghComment = task { _ match {
-    case Array() => task { Some("""usage: gh-comment <num> ""<comment>"" """) }
-    case Array(num, comm) => try {
-        val (user, repo) = ghRepository
-        issues.comment(num.toLong, comm) { (_: Option[Comment]) match {
-          case Some(c) => println("""Posted comment "%s" on issue %s as @%s for %s/%s""" format(
-            c.body, num, c.user, user, repo)
-          )
-          case _ => println("Comment not posted")
-        } }
-        None
-      } catch { case _ => Some("Invalid arguments num: %s, comment: %s" format(num, comm)) }
-  } } describedAs("Posts a new Comment on a Github Issue")
+  override def settings = Github.settings ++ Seq(
+    ghComments <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+        args match {
+          case num :: Nil => try {
+            val (user, repo) = repository
+            out.log.info("Comments on issue %s for %s/%s" format(num, user, repo))
+            api.comments(num.toLong) { (_: List[Comment]) match {
+              case Nil => out.log.info("There were no comments on this issue")
+              case l => for (c <-l) commentListing(c)
+            } }
+          } catch { case _ => out.log.warn("Invalid arguments num: %s" format num) }
+          case _ => out.log.warn("usage: gh-comments <num>")
+        }
+      }
+    },
 
+    ghComment <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
+        args match {
+          case num :: comm :: Nil => try {
+            val (user, repo) = repository
+            api.comment(num.toLong, comm) { (_: Option[Comment]) match {
+              case Some(c) => out.log.info("""Posted comment "%s" on issue %s as @%s for %s/%s""" format(
+                c.body, num, c.user, user, repo)
+              )
+              case _ => out.log.warn("Comment not posted")
+            } }
+          } catch { case _ => out.log.warn("Invalid arguments num: %s, comment: %s" format(num, comm)) }
+          case _ => out.log.warn("""usage: gh-comment <num> ""<comment>"" """)
+        }
+      }
+    })
 }
 
-/** Mixin for github.com issue tracking and labeling */
-trait Issues extends IssueTasks
-     with LabelTasks
-     with CommentTasks
-     with DefaultIssuesProvider
-     with GhInfo
+object Github {
+  val repository = SettingKey[(String, String)]("gh-repository", "A tuple of (user,repository) hosted on github")
+  val credentials = SettingKey[(String, String)]("gh-credentials", "A tuple of (user, password) to authenticate with the github api")
+  val api = SettingKey[gh.IssuesApi]("gh-api")
 
-trait IssuesProvider {
-  self: GhInfo =>
-
-  def issues: IssuesApi
-}
-
-trait GhInfo {
-  /** (username, reponame) */
-  def ghRepository: (String, String)
-
-  /** (username, password) */
-  def ghCredentials: (String, String)
-}
-
-/** Preconfigured IssuesProvider */
-trait DefaultIssuesProvider extends IssuesProvider {
-  self: GhInfo =>
-
-  lazy val issues = new IssuesApi {
-    val ghInfo = self
-  }
-}
-
-private [gh] trait IssuesApi {
-  import dispatch._
-  import dispatch.Http._
-  import dispatch.liftjson.Js._
-  import net.liftweb.json._
-  import net.liftweb.json.JsonAST._
-  import java.net.URLEncoder
-
-  type One[A] = JValue => Option[A]
-  type Many[A] = JValue => List[A]
-
-  val ghInfo: GhInfo
-
-  lazy val ghRepo = ghInfo.ghRepository._2
-
-  lazy val ghUser = ghInfo.ghRepository._1
-
-  lazy val auth = ghInfo.ghCredentials
-
-  private [gh] val github = :/("github.com") / "api" / "v2" / "json" / "issues"
-
-  private [gh] def http = new Http {
-    /** quiet dispatch request logging */
-    override def make_logger = new Logger {
-      def info(msg: String, items: Any*) = ()
+  def settings = Defaults.defaultSettings ++ Seq(
+    repository := ("<user>", "<repo>"),
+    credentials := ("<user>", "<password>"),
+    api <<= (repository, credentials) { (repo, creds) =>
+      new IssuesApi {
+        val auth = creds
+        val ghUser = repo._1
+        val ghRepo = repo._2
+      }
     }
-  }
-
-  def issue[A, B](num: Long)(f: Option[A] => B)(implicit one: One[A]) =
-    try {
-      http(github / "show" / ghUser / ghRepo / num.toString ># { js =>
-        f(one(js))
-      })
-    } catch { case StatusCode(c, _) => f(None) }
-
-  def issues[A, B](f: List[A] => B)(implicit many: Many[A]) =
-    try {
-      http(github / "list" / ghUser / ghRepo / "open" ># { js =>
-        f(many(js))
-      })
-    } catch { case StatusCode(c, _) => f(Nil) }
-
-  def closedIssues[A, B](f: List[A] => B)(implicit many: Many[A]) =
-    try {
-      http(github / "list" / ghUser / ghRepo / "closed" ># { js =>
-        f(many(js))
-      })
-    } catch { case StatusCode(c, _) => f(Nil) }
-
-  def searchOpen[A, B](term: String)(f: List[A] => B)(implicit many: Many[A]) =
-    try {
-      http(github / "search" / ghUser / ghRepo / "open" / URLEncoder.encode(term, "utf-8") ># { js =>
-        f(many(js))
-      })
-    } catch { case StatusCode(c, _) => f(Nil) }
-
-  def searchClosed[A, B](term: String)(f: List[A] => B)(implicit many: Many[A]) =
-    try {
-      http(github / "search" / ghUser / ghRepo / "closed" / URLEncoder.encode(term, "utf-8") ># { js =>
-        f(many(js))
-      })
-    } catch { case StatusCode(c, _) => f(Nil) }
-
-  def openIssue[A, B](title: String, body: String)(f: Option[A] => B)(implicit one: One[A]) = {
-    val (user, pass) = auth
-    try {
-      http(github.POST.as_!(user, pass) / "open" / ghUser / ghRepo << Map(
-        "title" -> title, "body" -> body
-      ) ># { js =>
-        f(one(js))
-      })
-    } catch { case StatusCode(c, _) => f(None) }
-  }
-
-  def editIssue[A, B](num: Long, title: String, body: String)(f: Option[A] => B)(implicit one: One[A]) = {
-    val (user, pass) = auth
-    try {
-      http(github.POST.as_!(user, pass) / "edit" / ghUser / ghRepo / num.toString << Map(
-        "title" -> title, "body" -> body
-      ) ># { js =>
-        f(one(js))
-      })
-    } catch { case StatusCode(c, _) => f(None) }
-  }
-
-  def closeIssue[A, B](num: Long)(f: Option[A] => B)(implicit one: One[A]) = {
-    val (user, pass) = auth
-    try {
-      http(github.POST.as_!(user, pass) / "close" / ghUser / ghRepo / num.toString ># { js =>
-        f(one(js))
-      })
-    } catch { case StatusCode(c, _) => f(None) }
-  }
-
-  def labels[A, B](f: List[A] => B)(implicit many: Many[A]) =
-    try {
-      http(github / "labels" / ghUser / ghRepo ># { js =>
-        f(many(js))
-      })
-    } catch { case StatusCode(c, _) => f(Nil) }
-
-  def addLabel[A, B](label: String, num: Long)(f: List[A] => B)(implicit many: Many[A]) = {
-    val (user, pass) = auth
-    try {
-      http(github.POST.as_!(user, pass) / "label" / "add" / ghUser / ghRepo / label / num.toString ># { js =>
-        f(many(js))
-      })
-    } catch { case StatusCode(c, _) => f(Nil) }
-  }
-
-  def removeLabel[A, B](label: String, num: Long)(f: List[A] => B)(implicit many: Many[A]) = {
-    val (user, pass) = auth
-    try {
-      http(github.POST.as_!(user, pass) / "label" / "remove" / ghUser / ghRepo / label / num.toString ># { js =>
-        f(many(js))
-      })
-    } catch { case StatusCode(c, _) => f(Nil) }
-  }
-
-  def comments[A, B](num: Long)(f: List[A] => B)(implicit many: Many[A]) =
-    try {
-      http(github  / "comments" / ghUser / ghRepo / num.toString ># { js =>
-        f(many(js))
-      })
-    } catch { case StatusCode(c, _) => f(Nil) }
-
-  def comment[A, B](id: Long, comment: String)(f: Option[A] => B)(implicit one: One[A]) = {
-    val (user, pass) = auth
-    try {
-      http(github.POST.as_!(user, pass) / "comment" / ghUser / ghRepo / id.toString << Map(
-        "comment" -> comment
-      ) ># { js =>
-        f(one(js))
-      })
-    } catch { case StatusCode(c, _) => f(None) }
-  }
+  )
 }
