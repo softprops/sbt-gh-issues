@@ -76,8 +76,8 @@ object LabelTasks extends ColorizedLogging {
   val ghRemoveLabel = InputKey[Unit]("gh-remove-label", "Removes a Label from a gh issue")
 
   def settings = Github.settings ++ Seq(
-    ghLabels <<= inputTask { (argstask: TaskKey[Seq[String]]) =>
-      (argstask, Github.api) map { (args, api) =>
+    ghLabels <<= inputTask { (argsTask: TaskKey[Seq[String]]) =>
+      (argsTask, Github.api) map { (args, api) =>
         api.labels {
           (_: List[String]).foreach(labelListing)
         }
@@ -101,7 +101,7 @@ object LabelTasks extends ColorizedLogging {
     ghRemoveLabel <<= inputTask { (argTask: TaskKey[Seq[String]]) =>
       (argTask, Github.api, Github.repository, streams) map { (args, api, repository, out) =>
         args match {
-          case label :: num :: Nil=> try {
+          case label :: num :: Nil => try {
             val (user, repo) = repository
             api.removeLabel(label, num.toLong) { labels: List[String] =>
               out.log.info("""Removed label "%s" from Issue %s of %s/%s""" format(label, num, user, repo))
